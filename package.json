@@ -15,7 +15,7 @@
     "lodash": "^3.9.1",
     "moment": "^2.10.3",
     "request": "^2.55.0",
-    "selenium-webdriver": "^2.45.1",
+    "selenium-webdriver": "^2.46.1",
     "underscore.string": "^3.0.3",
     "when": "^3.7.3"
   }

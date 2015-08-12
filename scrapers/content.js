@@ -4,9 +4,27 @@ var _ = require('lodash');
 var _s = require('underscore.string');
 var cheerio = require('cheerio');
 var fs = require('fs');
+var parallel = require('when/parallel');
 
 var Content = function () {
     var BASE_DOMAIN = 'http://www.cinemax.com';
+
+    function subtitleRequest(payload, name, href) {
+        return function () {
+            return when.promise(function (resolve) {
+                request({uri: href}, function (err, response, body) {
+                    var ref = _.find(payload.bundled.mediaTray, {title: name});
+                    if (!err) {
+                        var $ = cheerio.load(body);
+                        resolve(_.set(ref, 'home:Features.items[0].subtitle', $('#short-description').find('p').text()));
+                    } else {
+                        resolve(_.set(ref, 'home:Features.items[0].subtitle', ''));
+                    }
+                });
+            });
+        };
+    }
+
     return when.promise(function (resolve) {
         request({uri: BASE_DOMAIN}, function (err, response, body) {
             var $ = cheerio.load(body), payload = {
@@ -26,7 +44,12 @@ var Content = function () {
                         }),
                         "home:Features": {
                             items: _.map($('.carousel').find('.info').find('div').find('h2'), function (h2) {
-                                return {title: $(h2).text(), button: {}};
+                                return {
+                                    title: $(h2).text(), button: {
+                                        label: 'Watch a Preview',
+                                        nav: BASE_DOMAIN + $(h2).parent().find('a')[0].attribs.href
+                                    }
+                                };
                             }),
                             title: 'This Week on Max',
                             url: '/'
@@ -38,16 +61,22 @@ var Content = function () {
             _.merge(payload, {
                 navigation: {
                     mediaTray: _.uniq(_.map(_.zip(payload.content.parsed['common:FullBleedImage'], payload.content.parsed['home:Features'].items), function (featureAr) {
-                        return {img: featureAr[0].src, name: _s.titleize(featureAr[1].title)};
+                        return {
+                            img: featureAr[0].src,
+                            name: _s.titleize(featureAr[1].title),
+                            nav: featureAr[1].button.nav
+                        };
                     }).concat([{
                         name: primaryFeatures.find('h3').text(),
-                        img: BASE_DOMAIN + primaryFeatures.find('img')[0].attribs.src
+                        img: BASE_DOMAIN + primaryFeatures.find('img')[0].attribs.src,
+                        nav: BASE_DOMAIN + primaryFeatures.find('a')[0].attribs.href
                     }]).concat(_.map(secondaryFeatures.find('li'), function (li) {
-                            return {
-                                name: $(li).find('h5').text(),
-                                img: BASE_DOMAIN + $(li).find('img')[0].attribs.src
-                            };
-                        })), 'name')
+                        return {
+                            name: $(li).find('h5').text(),
+                            img: BASE_DOMAIN + $(li).find('img')[0].attribs.src,
+                            nav: BASE_DOMAIN + $(li).find('a')[0].attribs.href
+                        };
+                    })), 'name')
                 }
             });
 
@@ -59,15 +88,15 @@ var Content = function () {
                             "home:Features": {
                                 items: [{
                                     title: mediaItem.name,
-                                    subtitle: subtitleRequest(mediaItem.nav),
+                                    subtitle: subtitleRequest(payload, mediaItem.name, mediaItem.nav),
                                     button: {
                                         label: 'Find Out More',
-                                        nav: '/'
+                                        nav: mediaItem.nav
                                     }
                                 }]
                             },
                             title: mediaItem.name,
-                            url: '/'
+                            url: mediaItem.nav
                         });
                     }),
                     "schedule": {
@@ -262,8 +291,12 @@ var Content = function () {
                 }
             });
 
-            fs.writeFileSync('./out/content.json', JSON.stringify(payload));
-            resolve();
+            parallel(_.map(payload.bundled.mediaTray, function (mt) {
+                return _.get(mt, 'home:Features.items[0].subtitle');
+            })).then(function () {
+                fs.writeFileSync('./out/content.json', JSON.stringify(payload));
+                resolve();
+            });
         });
     });
 };
