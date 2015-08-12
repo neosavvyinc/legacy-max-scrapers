@@ -57,7 +57,14 @@ var Content = function () {
                         return _.merge(_.cloneDeep(mediaItem), {
                             "common:FullBleedImage": [{src: mediaItem.img}],
                             "home:Features": {
-                                items: [{title: mediaItem.name, button: {}}]
+                                items: [{
+                                    title: mediaItem.name,
+                                    subtitle: subtitleRequest(mediaItem.nav),
+                                    button: {
+                                        label: 'Find Out More',
+                                        nav: '/'
+                                    }
+                                }]
                             },
                             title: mediaItem.name,
                             url: '/'
