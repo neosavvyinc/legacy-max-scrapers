@@ -17,6 +17,10 @@
     "request": "^2.55.0",
     "selenium-webdriver": "^2.46.1",
     "underscore.string": "^3.0.3",
-    "when": "^3.7.3"
+    "when": "^3.7.3",
+    "async": "latest"
+  },
+  "devDependencies": {
+    "chromedriver": "^2.16.0"
   }
 }
