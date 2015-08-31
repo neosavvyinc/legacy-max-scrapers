@@ -68,6 +68,22 @@ module.exports = function () {
     });
 };
 
+var _getPrevPage = function(driver) {
+    return when.promise(function(resolve) {
+        setTimeout(function () {
+            driver.findElement(By.css('.schedule-wrapper'))
+                    .findElements(By.tagName('div'))
+                    .then(function(divs) {
+                        divs[0].findElements(By.tagName('a'))
+                                .then(function(a) {
+                                    a[0].click();
+                                    resolve(driver);
+                                });
+                    });
+        }, 2000);
+    });
+};
+
 //Get details for each program(by focusId)
 var _getProgramDetails = function(detailUrl) {
     var focusId = detailUrl.split('FOCUS_ID=')[1];
@@ -162,9 +178,46 @@ var _getProgramDetails = function(detailUrl) {
 //Get list of all scheduled programs on the page
 var _getAllPrograms = function(url) {
     return when.promise(function(resolve) {
-        var driver = _createDriver();
+        var driver = _createDriver(driver);
         driver.get(url);
 
+        var allPrograms = [];
+
+        //For first page
+        allPrograms.push(_getAllProgramsOnPage(driver));
+        //For previous 10 links
+        resolve(_getAllPrevLinks(allPrograms, driver, 0));
+    });
+};
+
+//For previous 10 links
+var _getAllPrevLinks = function(allPrograms, driver, count) {
+    return when.promise(function(resolve) {
+        if(count >= 9) {
+            when.all(allPrograms).then(function(links) {
+                setTimeout(function () {
+                    driver.quit();
+                }, 2000);
+                console.log('Unique', _.uniq(_.flatten(links)).length);
+                resolve(_.uniq(_.flatten(links)));
+            });
+        } else {
+            _getPrevPage(driver).then(function (driver) {
+                allPrograms.push(_getAllProgramsOnPage(driver));
+                _getAllPrevLinks(allPrograms, driver, count + 1).then(function(programs) {
+                    return when.promise(function(res) {
+                        setTimeout(function() {
+                            resolve(programs);
+                        }, 2000);
+                    });
+                });
+            });
+        }
+    });
+};
+
+var _getAllProgramsOnPage = function(driver) {
+    return when.promise(function(resolve) {
         setTimeout(function () {
             var links = [];
             driver.findElement(By.css('.schedule-wrapper'))
@@ -175,9 +228,6 @@ var _getAllPrograms = function(url) {
                             return _a.getAttribute('href');
                         });
                         when.all(links).then(function(values) {
-                            setTimeout(function () {
-                                driver.quit();
-                            }, 2000);
                             resolve(values);
                         });
                     });
@@ -255,8 +305,8 @@ var _parseChannelInfo = function(channelInfo) {
 
 var _parseToISODate = function(date, time) {
     var d = '2015/' + date.split(' ')[1];
-    var time = time.split(' ')[0] + ':00';
-    return new Date(d + ' ' + time).toISOString().replace('.000Z', 'Z');
+    var t = time.split(' ')[0] + ':00';
+    return new Date(d + ' ' + t).toISOString().replace('.000Z', 'Z');
 };
 
 var _getAttribute = function(element, attrib) {
